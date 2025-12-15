@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Catálogo Online Surquillo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; padding:0; }
+    header { background:#222; color:#fff; padding:10px; position:sticky; top:0; z-index:10; }
+    .tabs { display:flex; gap:6px; overflow-x:auto; }
+    .tab { background:#444; color:#fff; border:none; padding:8px 12px; cursor:pointer; white-space:nowrap; }
+    .tab.active { background:#f57c00; }
+    .productos { padding:15px; }
+    .producto { border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:6px; }
+    .producto button { margin-top:6px; }
+    .cart-btn { position:fixed; bottom:20px; right:20px; background:#f57c00; color:#fff; border:none; border-radius:50%; width:60px; height:60px; font-size:22px; cursor:pointer; }
+    .cart-count { position:absolute; top:-5px; right:-5px; background:red; color:#fff; border-radius:50%; padding:2px 6px; font-size:12px; }
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); }
+    .modal-content { background:#fff; margin:10% auto; padding:15px; width:90%; max-width:400px; border-radius:8px; }
+    .item-cart { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .item-cart input { width:50px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h2>Catálogo Surquillo</h2>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<div class="productos" id="productos"></div>
+
+<button class="cart-btn" onclick="abrirCarrito()">🛒<span class="cart-count" id="cartCount">0</span></button>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3>Mi pedido</h3>
+    <div id="carrito"></div>
+    <button onclick="enviarWhatsApp()">Enviar por WhatsApp</button>
+    <button onclick="cerrarCarrito()">Cerrar</button>
+  </div>
+</div>
+
+<script>
+const WHATSAPP = '51993745873';
+const CATEGORIAS_VALIDAS = [
+ 'BEBIDA CALIENTE','BEBIDA ENVASADA','BEBIDA FRIA','CHOCOLATE','CONFITERIA','GALLETA','HELADOS','OTROS','POSTRES','SANDWICHES','SNACK'
+];
+
+let productos = [];
+let carrito = {};
+let categoriaActual = '';
+
+fetch('DataExcel/ProductoSurquilloUpload.csv')
+  .then(r => r.text())
+  .then(text => cargarCSV(text));
+
+function cargarCSV(text){
+  const filas = text.split('\n').slice(1);
+  filas.forEach(f => {
+    const c = f.split(',');
+    if(c.length < 9) return;
+    const categoria = c[2];
+    const stock = parseInt(c[3]);
+    if(stock >= 1 && CATEGORIAS_VALIDAS.includes(categoria)){
+      productos.push({categoria, nombre:c[6], precio:c[8]});
+    }
+  });
+  crearTabs();
+}
+
+function crearTabs(){
+  const tabs = document.getElementById('tabs');
+  const cats = [...new Set(productos.map(p=>p.categoria))];
+  cats.forEach((cat,i)=>{
+    const b = document.createElement('button');
+    b.textContent = cat;
+    b.className = 'tab' + (i===0?' active':'');
+    b.onclick = ()=>mostrarCategoria(cat,b);
+    tabs.appendChild(b);
+    if(i===0) categoriaActual = cat;
+  });
+  mostrarProductos();
+}
+
+function mostrarCategoria(cat,btn){
+  categoriaActual = cat;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  mostrarProductos();
+}
+
+function mostrarProductos(){
+  const cont = document.getElementById('productos');
+  cont.innerHTML = '';
+  productos.filter(p=>p.categoria===categoriaActual).forEach(p=>{
+    const d = document.createElement('div');
+    d.className = 'producto';
+    d.innerHTML = `<strong>${p.nombre}</strong><br>Precio: S/ ${p.precio}<br><button onclick="agregar('${p.nombre}', '${p.precio}')">Agregar</button>`;
+    cont.appendChild(d);
+  });
+}
+
+function agregar(nombre, precio){
+  if(!carrito[nombre]) carrito[nombre] = {precio, qty:1};
+  else if(carrito[nombre].qty < 99) carrito[nombre].qty++;
+  actualizarCarrito();
+}
+
+function actualizarCarrito(){
+  const cont = document.getElementById('carrito');
+  cont.innerHTML = '';
+  let totalItems = 0;
+  for(const n in carrito){
+    totalItems += carrito[n].qty;
+    const div = document.createElement('div');
+    div.className = 'item-cart';
+    div.innerHTML = `${n} <input type="number" min="1" max="99" value="${carrito[n].qty}" onchange="cambiarQty('${n}',this.value)">`;
+    cont.appendChild(div);
+  }
+  document.getElementById('cartCount').textContent = totalItems;
+}
+
+function cambiarQty(nombre,val){
+  carrito[nombre].qty = Math.max(1, Math.min(99, parseInt(val)));
+  actualizarCarrito();
+}
+
+function abrirCarrito(){ document.getElementById('modal').style.display='block'; }
+function cerrarCarrito(){ document.getElementById('modal').style.display='none'; }
+
+function enviarWhatsApp(){
+  let msg = 'Hola, deseo pedir:%0A';
+  for(const n in carrito){ msg += `- ${n} x${carrito[n].qty}%0A`; }
+  window.open(`https://wa.me/${WHATSAPP}?text=${msg}`,'_blank');
+}
+</script>
+
+</body>
+</html>
